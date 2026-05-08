@@ -170,6 +170,43 @@ Recommended first-run values:
 
 Starting with `GPU Layers = 0` keeps things calm while you validate the flow. Once the app is stable on your machine, you can experiment upward with higher GPU layer counts like 99.
 
+
+## What To Add Next
+
+Good next upgrades for this repo:
+
+- Streaming token output to the browser
+- Chat history with multi-turn context
+- System prompt support
+- Presets for coding, summarization, and brainstorming
+- Markdown rendering for responses
+- Copy button for outputs
+- Request cancellation button
+- Basic prompt templates
+- Docker support
+- A proper demo GIF in `docs/`
+
+## Why This Repo Is Nice To Push
+
+- Small and understandable
+- No model weights committed
+- No giant build directory committed
+- Clear setup steps
+- Easy for someone else to clone and run
+
+That means your GitHub repo can stay clean, fast to review, and friendly to future-you.
+
+## Notes
+
+- This project uses `llama-completion`, not `llama-cli`
+- It is designed for local usage
+- Model speed depends heavily on your hardware and model size
+
+
+
+
+
+
 ## Useful Commands
 
 ### Create virtual environment
@@ -256,35 +293,18 @@ Then watch for lines like:
 Running command: /path/to/llama-completion ...
 ```
 
-## What To Add Next
 
-Good next upgrades for this repo:
+## 📩 Contact
 
-- Streaming token output to the browser
-- Chat history with multi-turn context
-- System prompt support
-- Presets for coding, summarization, and brainstorming
-- Markdown rendering for responses
-- Copy button for outputs
-- Request cancellation button
-- Basic prompt templates
-- Docker support
-- A proper demo GIF in `docs/`
-
-## Why This Repo Is Nice To Push
-
-- Small and understandable
-- No model weights committed
-- No giant build directory committed
-- Clear setup steps
-- Easy for someone else to clone and run
-
-That means your GitHub repo can stay clean, fast to review, and friendly to future-you.
-
-## Notes
-
-- This project uses `llama-completion`, not `llama-cli`
-- It is designed for local usage
-- Model speed depends heavily on your hardware and model size
-
+| Name              | Details                             |
+|-------------------|-------------------------------------|
+| **👨‍💻 Developer**  | Sachin Arora                      |
+| **📧 Email**      | [sachnaror@gmail.com](mailto:sacinaror@gmail.com) |
+| **📍 Location**   | Noida, India                       |
+| **📂 GitHub**     | [Link](https://github.com/sachnaror) |
+| **🌐 Youtube**    | [Link](https://www.youtube.com/@sachnaror4841/videos) |
+| **🌐 Blog**       | [Link](https://medium.com/@schnaror) |
+| **🌐 Website**    | [Link](https://about.me/sachin-arora) |
+| **🌐 Twitter**    | [Link](https://twitter.com/sachinhep) |
+| **📱 Phone**      | [+91 9560330483](tel:+919560330483) |
 
