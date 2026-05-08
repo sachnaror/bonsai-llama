@@ -21,20 +21,14 @@ This repo is intentionally simple. No database. No auth. No orchestration layer 
 
 ## Preview
 
-The repo now includes a built-in preview banner:
+<img src="docs/app-screenshot.png" alt="Bonsai Llama app screenshot" width="700">
+
+The README also includes a lightweight banner graphic for a cleaner first impression, but this screenshot is the real app in action.
 
 ```md
 ![Bonsai Llama Preview](docs/readme-preview.svg)
+![Bonsai Llama App Screenshot](docs/app-screenshot.png)
 ```
-
-You can still add real product GIFs later:
-
-```md
-![Chat demo](docs/demo-chat.gif)
-![Settings panel](docs/demo-settings.gif)
-```
-
-For now, the README has something handsome to wear in public.
 
 ## Why Bonsai?
 
@@ -171,13 +165,13 @@ The UI exposes:
 
 Recommended first-run values:
 
-- Tokens: `64`
+- Tokens: `300`
 - Temperature: `0.5`
 - Top P: `0.9`
 - Top K: `30`
-- GPU Layers: `99`
+- GPU Layers: `0`
 
-Starting with `GPU Layers = 0` keeps things calm while you validate the flow. Once the app is stable on your machine, you can experiment upward with `GPU Layers = 99'
+Starting with `GPU Layers = 0` keeps things calm while you validate the flow. Once the app is stable on your machine, you can experiment upward with higher GPU layer counts like 99.
 
 ## Useful Commands
 
