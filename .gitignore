@@ -1,0 +1,21 @@
+.DS_Store
+.env
+.env.*
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.log
+
+# Local editor and OS files
+.vscode/
+.idea/
+
+# Large local assets and sibling dependencies
+models/
+llama.cpp/
+
+# Optional demo assets you may generate locally later
+docs/*.mp4
+docs/*.mov
+docs/*.gif

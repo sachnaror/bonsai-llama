@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bonsai Llama</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-body-tertiary">
+  <div class="container-fluid">
+    <div class="row min-vh-100">
+      <aside class="col-12 col-lg-3 border-end bg-white p-4">
+        <h4 class="mb-4">Settings</h4>
+        <form id="chatForm" class="d-grid gap-3">
+          <div>
+            <label for="model" class="form-label">Model</label>
+            <select id="model" class="form-select" name="model" {% if not models %}disabled{% endif %}>
+              {% if models %}
+                {% for m in models %}
+                  <option value="{{ m }}" {% if m == default_model %}selected{% endif %}>{{ m }}</option>
+                {% endfor %}
+              {% else %}
+                <option>No models found</option>
+              {% endif %}
+            </select>
+          </div>
+          <div>
+            <label for="n" class="form-label">Tokens</label>
+            <input id="n" type="number" name="n" value="300" class="form-control">
+          </div>
+          <div>
+            <label for="temp" class="form-label">Temp</label>
+            <input id="temp" type="number" step="0.1" name="temp" value="0.5" class="form-control">
+          </div>
+          <div>
+            <label for="top_p" class="form-label">Top P</label>
+            <input id="top_p" type="number" step="0.05" name="top_p" value="0.9" class="form-control">
+          </div>
+          <div>
+            <label for="top_k" class="form-label">Top K</label>
+            <input id="top_k" type="number" name="top_k" value="30" class="form-control">
+          </div>
+          <div>
+            <label for="ngl" class="form-label">GPU Layers</label>
+            <input id="ngl" type="number" name="ngl" value="0" class="form-control">
+          </div>
+        </form>
+      </aside>
+
+      <main class="col-12 col-lg-9 d-flex flex-column p-0">
+        <div id="chatBox" class="flex-grow-1 p-4 overflow-auto bg-light"></div>
+        <div class="border-top bg-white p-4">
+          <label for="prompt" class="form-label">Prompt</label>
+          <textarea id="prompt" class="form-control" rows="4" placeholder="Ask something..." {% if not models %}disabled{% endif %}></textarea>
+          <div class="d-flex align-items-center gap-3 mt-3">
+            <button id="sendButton" class="btn btn-primary" onclick="sendChat()" {% if not models %}disabled{% endif %}>Send</button>
+            <span id="statusText" class="text-secondary small"></span>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script>
+    const chatBox = document.getElementById("chatBox");
+    const promptInput = document.getElementById("prompt");
+    const form = document.getElementById("chatForm");
+    const sendButton = document.getElementById("sendButton");
+    const statusText = document.getElementById("statusText");
+
+    function appendMessage(label, text, tone) {
+      const wrapper = document.createElement("div");
+      wrapper.className = "mb-3";
+      wrapper.innerHTML = `
+        <div class="fw-semibold">${label}</div>
+        <div class="border rounded p-3 bg-${tone}">${text.replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br>")}</div>
+      `;
+      chatBox.appendChild(wrapper);
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    async function sendChat() {
+      const prompt = promptInput.value.trim();
+      if (!prompt) return;
+
+      const data = new FormData(form);
+      data.append("prompt", prompt);
+
+      appendMessage("You", prompt, "white");
+      promptInput.value = "";
+      sendButton.disabled = true;
+      statusText.textContent = "Running llama-cli...";
+
+      try {
+        const response = await fetch("/chat", {
+          method: "POST",
+          body: data
+        });
+
+        const payload = await response.json();
+
+        if (!response.ok) {
+          appendMessage("Error", payload.detail || "Request failed", "danger-subtle");
+          return;
+        }
+
+        appendMessage("AI", payload.response || "(empty response)", "body-tertiary");
+      } catch (error) {
+        appendMessage("Error", error.message || "Request failed", "danger-subtle");
+      } finally {
+        sendButton.disabled = false;
+        statusText.textContent = "";
+        promptInput.focus();
+      }
+    }
+
+    promptInput.addEventListener("keydown", function(event) {
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        sendChat();
+      }
+    });
+  </script>
+</body>
+</html>
