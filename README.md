@@ -7,9 +7,7 @@
   <img src="https://img.shields.io/badge/Bonsai-8B%20GGUF-3A7A3A?style=for-the-badge" alt="Bonsai model">
 </p>
 
-<p align="center">
-  <img src="docs/readme-preview.svg" alt="Bonsai Llama preview banner" width="100%">
-</p>
+
 
 Small local chat UI for running a Bonsai GGUF model through `llama.cpp` using:
 
