@@ -24,8 +24,7 @@ This repo is intentionally simple. No database. No auth. No orchestration layer 
 The README also includes a lightweight banner graphic for a cleaner first impression, but this screenshot is the real app in action.
 
 ```md
-![Bonsai Llama Preview](docs/readme-preview.svg)
-![Bonsai Llama App Screenshot](docs/app-screenshot.png)
+
 ```
 
 ## Why Bonsai?
@@ -173,10 +172,40 @@ Starting with `GPU Layers = 0` keeps things calm while you validate the flow. On
 
 ## Useful Commands
 
+### Create virtual environment
+
+```bash
+python3 -m venv .venv
+```
+
+### Install dependencies
+
+```bash
+.venv/bin/pip install -r requirements.txt
+```
+
 ### Start development server
 
 ```bash
 .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+### Open the app
+
+```bash
+open http://127.0.0.1:8000
+```
+
+### Run with custom model directory
+
+```bash
+BONSAI_MODEL_DIR="/absolute/path/to/models" .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+### Run with custom llama-completion binary
+
+```bash
+BONSAI_LLAMA_COMPLETION="/absolute/path/to/llama-completion" .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
 ### Check what is using port 8000
@@ -185,16 +214,46 @@ Starting with `GPU Layers = 0` keeps things calm while you validate the flow. On
 lsof -nP -iTCP:8000 -sTCP:LISTEN
 ```
 
-### Stop a stuck local server
+### Stop a local server by PID
 
 ```bash
 kill <PID>
 ```
 
-### If it is still being dramatic
+### Force stop a stuck local server
 
 ```bash
 kill -9 <PID>
+```
+
+### Verify the llama.cpp binary exists
+
+```bash
+ls -la ../llama.cpp/build/bin/llama-completion
+```
+
+### Verify available models
+
+```bash
+ls -la ../models
+```
+
+### Quick syntax check for the backend
+
+```bash
+python3 -m py_compile app/main.py
+```
+
+### See live server logs in the terminal
+
+```bash
+.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+Then watch for lines like:
+
+```text
+Running command: /path/to/llama-completion ...
 ```
 
 ## What To Add Next
@@ -228,8 +287,4 @@ That means your GitHub repo can stay clean, fast to review, and friendly to futu
 - It is designed for local usage
 - Model speed depends heavily on your hardware and model size
 
-## License
 
-Add the license you want before publishing if this is going public.
-
-MIT is the usual "please just let me ship this" answer.
