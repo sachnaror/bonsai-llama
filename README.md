@@ -7,6 +7,10 @@
   <img src="https://img.shields.io/badge/Bonsai-8B%20GGUF-3A7A3A?style=for-the-badge" alt="Bonsai model">
 </p>
 
+<p align="center">
+  <img src="docs/readme-preview.svg" alt="Bonsai Llama preview banner" width="100%">
+</p>
+
 Small local chat UI for running a Bonsai GGUF model through `llama.cpp` using:
 
 - `FastAPI` for the backend
@@ -17,14 +21,20 @@ This repo is intentionally simple. No database. No auth. No orchestration layer 
 
 ## Preview
 
-Add your own demo captures here once you record them:
+The repo now includes a built-in preview banner:
+
+```md
+![Bonsai Llama Preview](docs/readme-preview.svg)
+```
+
+You can still add real product GIFs later:
 
 ```md
 ![Chat demo](docs/demo-chat.gif)
 ![Settings panel](docs/demo-settings.gif)
 ```
 
-If you do not have GIFs yet, that is fine. The app still works. It is not emotionally dependent on them.
+For now, the README has something handsome to wear in public.
 
 ## Why Bonsai?
 
@@ -165,9 +175,9 @@ Recommended first-run values:
 - Temperature: `0.5`
 - Top P: `0.9`
 - Top K: `30`
-- GPU Layers: `0`
+- GPU Layers: `99`
 
-Starting with `GPU Layers = 0` keeps things calm while you validate the flow. Once the app is stable on your machine, you can experiment upward.
+Starting with `GPU Layers = 0` keeps things calm while you validate the flow. Once the app is stable on your machine, you can experiment upward with `GPU Layers = 99'
 
 ## Useful Commands
 

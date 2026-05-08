@@ -1,9 +1,11 @@
+import json
 import os
 from pathlib import Path
 import subprocess
+import time
 
 from fastapi import FastAPI, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 
 
@@ -19,6 +21,9 @@ LLAMA_PATH = Path(
 
 app = FastAPI(title="Bonsai Llama")
 templates = Jinja2Templates(directory="app/templates")
+REQUEST_TIMEOUT_SECONDS = 120
+MAX_TOKENS = 256
+MAX_GPU_LAYERS = 99
 
 
 def get_models() -> list[str]:
@@ -27,9 +32,47 @@ def get_models() -> list[str]:
     return sorted(path.name for path in MODEL_DIR.glob("*.gguf"))
 
 
+def build_command(
+    prompt: str,
+    model: str,
+    n: int,
+    temp: float,
+    top_p: float,
+    top_k: int,
+    ngl: int,
+) -> list[str]:
+    model_path = MODEL_DIR / model
+    safe_n = max(1, min(n, MAX_TOKENS))
+    safe_ngl = max(0, min(ngl, MAX_GPU_LAYERS))
+
+    return [
+        str(LLAMA_PATH),
+        "-m",
+        str(model_path),
+        "-p",
+        prompt,
+        "--no-display-prompt",
+        "-n",
+        str(safe_n),
+        "--temp",
+        str(temp),
+        "--top-p",
+        str(top_p),
+        "--top-k",
+        str(top_k),
+        "-ngl",
+        str(safe_ngl),
+        "--simple-io",
+    ]
+
+
+def stream_line(payload: dict[str, str]) -> str:
+    return json.dumps(payload) + "\n"
+
+
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse(
+    response = templates.TemplateResponse(
         request=request,
         name="index.html",
         context={
@@ -37,18 +80,22 @@ def home(request: Request) -> HTMLResponse:
             "default_model": get_models()[0] if get_models() else None,
         },
     )
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
 
 
 @app.post("/chat")
 def chat(
     prompt: str = Form(...),
     model: str = Form(...),
-    n: int = Form(300),
+    n: int = Form(64),
     temp: float = Form(0.5),
     top_p: float = Form(0.9),
     top_k: int = Form(30),
     ngl: int = Form(0),
-) -> dict[str, str]:
+) -> StreamingResponse:
     if not LLAMA_PATH.exists():
         raise HTTPException(
             status_code=500,
@@ -59,54 +106,143 @@ def chat(
     if model not in available_models:
         raise HTTPException(status_code=400, detail="Selected model was not found")
 
-    model_path = MODEL_DIR / model
-    cmd = [
-        str(LLAMA_PATH),
-        "-m",
-        str(model_path),
-        "-p",
-        prompt,
-        "--no-display-prompt",
-        "-n",
-        str(n),
-        "--temp",
-        str(temp),
-        "--top-p",
-        str(top_p),
-        "--top-k",
-        str(top_k),
-        "-ngl",
-        str(ngl),
-        "--simple-io",
-    ]
+    clean_prompt = prompt.strip()
+    if not clean_prompt:
+        raise HTTPException(status_code=400, detail="Prompt cannot be empty")
 
-    try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=180,
-        )
-    except subprocess.TimeoutExpired as exc:
-        raise HTTPException(
-            status_code=504,
-            detail=(
-                "llama-completion timed out after 180 seconds. "
-                "Try a smaller token count, a smaller model, or check server logs."
-            ),
-        ) from exc
+    cmd = build_command(clean_prompt, model, n, temp, top_p, top_k, ngl)
 
-    if result.returncode != 0:
-        raise HTTPException(
-            status_code=500,
-            detail=(result.stderr or "llama-completion failed").strip(),
-        )
+    print("Running command:", " ".join(cmd), flush=True)
 
-    response_text = result.stdout.strip()
-    if not response_text:
-        raise HTTPException(
-            status_code=500,
-            detail=(result.stderr or "llama-completion returned an empty response").strip(),
-        )
+    def generate():
+        process = None
+        stdout_buffer = ""
+        stderr_parts: list[str] = []
+        streamed_any = False
+        started_at = time.monotonic()
 
-    return {"response": response_text}
+        try:
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                bufsize=0,
+            )
+            os.set_blocking(process.stdout.fileno(), False)
+            os.set_blocking(process.stderr.fileno(), False)
+
+            while True:
+                if time.monotonic() - started_at > REQUEST_TIMEOUT_SECONDS:
+                    process.kill()
+                    yield stream_line(
+                        {
+                            "type": "error",
+                            "content": (
+                                f"llama-completion timed out after {REQUEST_TIMEOUT_SECONDS} seconds. "
+                                "Try fewer tokens or GPU Layers = 0."
+                            ),
+                        }
+                    )
+                    return
+
+                stdout_chunk = b""
+                stderr_chunk = b""
+
+                if process.stdout:
+                    try:
+                        stdout_chunk = os.read(process.stdout.fileno(), 4096)
+                    except BlockingIOError:
+                        stdout_chunk = b""
+
+                if process.stderr:
+                    try:
+                        stderr_chunk = os.read(process.stderr.fileno(), 4096)
+                    except BlockingIOError:
+                        stderr_chunk = b""
+
+                stdout_text = stdout_chunk.decode("utf-8", errors="replace")
+                stderr_text = stderr_chunk.decode("utf-8", errors="replace")
+
+                if stderr_text:
+                    stderr_parts.append(stderr_text)
+
+                if stdout_text:
+                    streamed_any = True
+                    stdout_buffer += stdout_text
+                    yield stream_line({"type": "token", "content": stdout_text})
+
+                if process.poll() is not None:
+                    final_stdout = b""
+                    final_stderr = b""
+
+                    if process.stdout:
+                        try:
+                            final_stdout = os.read(process.stdout.fileno(), 4096)
+                        except OSError:
+                            final_stdout = b""
+
+                    if process.stderr:
+                        try:
+                            final_stderr = os.read(process.stderr.fileno(), 4096)
+                        except OSError:
+                            final_stderr = b""
+
+                    final_stdout_text = final_stdout.decode("utf-8", errors="replace")
+                    final_stderr_text = final_stderr.decode("utf-8", errors="replace")
+
+                    if final_stderr_text:
+                        stderr_parts.append(final_stderr_text)
+
+                    if final_stdout_text:
+                        streamed_any = True
+                        stdout_buffer += final_stdout_text
+                        yield stream_line({"type": "token", "content": final_stdout_text})
+
+                    if "".join(stderr_parts).strip():
+                        print(
+                            "llama-completion stderr:",
+                            "".join(stderr_parts).strip(),
+                            flush=True,
+                        )
+
+                    if process.returncode != 0:
+                        yield stream_line(
+                            {
+                                "type": "error",
+                                "content": (
+                                    "".join(stderr_parts).strip()
+                                    or "llama-completion failed"
+                                ),
+                            }
+                        )
+                        return
+
+                    if not streamed_any or not stdout_buffer.strip():
+                        yield stream_line(
+                            {
+                                "type": "error",
+                                "content": (
+                                    "".join(stderr_parts).strip()
+                                    or "llama-completion returned an empty response"
+                                ),
+                            }
+                        )
+                        return
+
+                    yield stream_line({"type": "done", "content": ""})
+                    return
+
+                time.sleep(0.05)
+        except Exception as exc:
+            if process and process.poll() is None:
+                process.kill()
+            yield stream_line({"type": "error", "content": str(exc)})
+
+    return StreamingResponse(
+        generate(),
+        media_type="application/x-ndjson",
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "X-Accel-Buffering": "no",
+        },
+    )
