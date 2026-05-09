@@ -61,6 +61,20 @@ The app:
 4. Calls `llama-completion` with those parameters
 5. Returns plain text output to the browser
 
+
+
+## Some intereesting features i added :
+
+- Streaming token output to the browser
+- Chat history with multi-turn context
+- System prompt support
+- Presets for coding, summarization, and brainstorming
+- Markdown rendering for responses
+- Copy button for outputs
+- Request cancellation button
+- Basic prompt templates
+
+
 ## Project Structure
 
 ```text
@@ -105,18 +119,8 @@ Recommended first-run values:
 Starting with `GPU Layers = 0` keeps things calm while you validate the flow. Once the app is stable on your machine, you can experiment upward with higher GPU layer counts like 99.
 
 
-## What To Add Next
+## What I can do next (but havent done yet):
 
-Good next upgrades for this repo:
-
-- Streaming token output to the browser
-- Chat history with multi-turn context
-- System prompt support
-- Presets for coding, summarization, and brainstorming
-- Markdown rendering for responses
-- Copy button for outputs
-- Request cancellation button
-- Basic prompt templates
 - Docker support
 - A proper demo GIF in `docs/`
 

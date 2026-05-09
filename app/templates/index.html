@@ -8,6 +8,33 @@
   <meta http-equiv="Expires" content="0">
   <title>Bonsai Llama</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    .message-markdown pre {
+      background: #0f172a;
+      color: #e2e8f0;
+      padding: 0.9rem;
+      border-radius: 0.5rem;
+      overflow-x: auto;
+    }
+
+    .message-markdown code {
+      background: rgba(15, 23, 42, 0.08);
+      padding: 0.12rem 0.35rem;
+      border-radius: 0.35rem;
+    }
+
+    .message-markdown pre code {
+      background: transparent;
+      padding: 0;
+    }
+
+    .message-markdown p:last-child,
+    .message-markdown ul:last-child,
+    .message-markdown ol:last-child,
+    .message-markdown pre:last-child {
+      margin-bottom: 0;
+    }
+  </style>
 </head>
 <body class="bg-body-tertiary">
   <div class="container-fluid">
@@ -15,6 +42,18 @@
       <aside class="col-12 col-lg-3 border-end bg-white p-4">
         <h4 class="mb-4">Settings</h4>
         <form id="chatForm" class="d-grid gap-3">
+          <div>
+            <label for="system_prompt" class="form-label">System Prompt</label>
+            <textarea id="system_prompt" name="system_prompt" rows="4" class="form-control" placeholder="You are a helpful local assistant."></textarea>
+          </div>
+          <div>
+            <label class="form-label">Presets</label>
+            <div class="d-grid gap-2">
+              <button type="button" class="btn btn-outline-secondary text-start preset-button" data-preset="coding">Coding</button>
+              <button type="button" class="btn btn-outline-secondary text-start preset-button" data-preset="summarization">Summarization</button>
+              <button type="button" class="btn btn-outline-secondary text-start preset-button" data-preset="brainstorming">Brainstorming</button>
+            </div>
+          </div>
           <div>
             <label for="model" class="form-label">Model</label>
             <select id="model" class="form-select" name="model" {% if not models %}disabled{% endif %}>
@@ -47,6 +86,21 @@
             <label for="ngl" class="form-label">GPU Layers</label>
             <input id="ngl" type="number" name="ngl" value="0" class="form-control">
           </div>
+          <div class="border rounded p-3 bg-light">
+            <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
+              <span class="fw-semibold">Context Meter</span>
+              <span id="contextStatus" class="badge text-bg-secondary">Healthy</span>
+            </div>
+            <div class="small text-secondary mb-2">
+              <div>Transcript chars: <span id="transcriptChars">0</span> / {{ max_prompt_chars }}</div>
+              <div>Approx input tokens: <span id="transcriptTokens">0</span></div>
+              <div>Output tokens setting: <span id="outputTokens">64</span> / {{ max_tokens }}</div>
+              <div>Saved turns: <span id="historyTurns">0</span> / {{ max_history_turns }}</div>
+            </div>
+            <div class="progress" role="progressbar" aria-label="Transcript size">
+              <div id="contextProgress" class="progress-bar" style="width: 0%"></div>
+            </div>
+          </div>
         </form>
       </aside>
 
@@ -54,7 +108,10 @@
         <div id="alertBox" class="p-3 pb-0"></div>
         <div id="chatBox" class="flex-grow-1 p-4 overflow-auto bg-light"></div>
         <div class="border-top bg-white p-4">
-          <label for="prompt" class="form-label">Prompt</label>
+          <div class="d-flex align-items-center justify-content-between gap-3 mb-3">
+            <label for="prompt" class="form-label mb-0">Prompt</label>
+            <button id="clearButton" type="button" class="btn btn-outline-secondary btn-sm" onclick="clearChat()">Clear Chat</button>
+          </div>
           <textarea id="prompt" class="form-control" rows="4" placeholder="Ask something..." {% if not models %}disabled{% endif %}></textarea>
           <div class="d-flex align-items-center gap-3 mt-3">
             <button id="sendButton" class="btn btn-primary" onclick="sendChat()" {% if not models %}disabled{% endif %}>Send</button>
@@ -65,6 +122,8 @@
     </div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.6/dist/purify.min.js"></script>
   <script>
     const chatBox = document.getElementById("chatBox");
     const promptInput = document.getElementById("prompt");
@@ -72,28 +131,98 @@
     const sendButton = document.getElementById("sendButton");
     const statusText = document.getElementById("statusText");
     const alertBox = document.getElementById("alertBox");
+    const systemPromptInput = document.getElementById("system_prompt");
+    const transcriptChars = document.getElementById("transcriptChars");
+    const transcriptTokens = document.getElementById("transcriptTokens");
+    const outputTokens = document.getElementById("outputTokens");
+    const historyTurns = document.getElementById("historyTurns");
+    const contextStatus = document.getElementById("contextStatus");
+    const contextProgress = document.getElementById("contextProgress");
+    const tokenInput = document.getElementById("n");
+    const tempInput = document.getElementById("temp");
+    const topPInput = document.getElementById("top_p");
+    const topKInput = document.getElementById("top_k");
+    const nglInput = document.getElementById("ngl");
+    const presetButtons = Array.from(document.querySelectorAll(".preset-button"));
+    const STORAGE_KEY = "bonsai-llama-chat-state";
+    const MAX_HISTORY_TURNS = {{ max_history_turns }};
+    const MAX_PROMPT_CHARS = {{ max_prompt_chars }};
+    let chatHistory = [];
+    let currentController = null;
+    let currentAssistantMessage = null;
+    let isGenerating = false;
+    const PRESETS = {
+      coding: {
+        label: "Coding",
+        systemPrompt: "You are a careful coding assistant. Explain clearly, prefer correct code, mention edge cases briefly, and keep answers practical.",
+        n: 192,
+        temp: 0.2,
+        topP: 0.9,
+        topK: 30,
+        ngl: 0
+      },
+      summarization: {
+        label: "Summarization",
+        systemPrompt: "You are a concise summarization assistant. Extract the key points, remove repetition, and preserve important details.",
+        n: 128,
+        temp: 0.3,
+        topP: 0.9,
+        topK: 30,
+        ngl: 0
+      },
+      brainstorming: {
+        label: "Brainstorming",
+        systemPrompt: "You are a creative brainstorming partner. Offer varied ideas, useful angles, and concrete next steps without getting too vague.",
+        n: 192,
+        temp: 0.8,
+        topP: 0.95,
+        topK: 40,
+        ngl: 0
+      }
+    };
+
+    function escapeHtml(text) {
+      return text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+    }
 
     function appendMessage(label, text, tone) {
       const wrapper = document.createElement("div");
       wrapper.className = "mb-3";
       wrapper.innerHTML = `
         <div class="fw-semibold">${label}</div>
-        <div class="border rounded p-3 bg-${tone}">${text.replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br>")}</div>
+        <div class="border rounded p-3 bg-${tone}">${escapeHtml(text).replace(/\n/g, "<br>")}</div>
       `;
       chatBox.appendChild(wrapper);
       chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    function appendRenderedAssistantMessage(text) {
+      const messageView = createStreamingMessage("AI", "body-tertiary");
+      updateAssistantMessage(messageView, text, true);
     }
 
     function createStreamingMessage(label, tone) {
       const wrapper = document.createElement("div");
       wrapper.className = "mb-3";
       wrapper.innerHTML = `
-        <div class="fw-semibold">${label}</div>
-        <div class="border rounded p-3 bg-${tone}"><span class="message-content"></span></div>
+        <div class="d-flex align-items-center justify-content-between gap-2 mb-1">
+          <div class="fw-semibold">${label}</div>
+          <button type="button" class="btn btn-outline-secondary btn-sm copy-button" disabled>Copy</button>
+        </div>
+        <div class="border rounded p-3 bg-${tone}">
+          <div class="message-content message-markdown"></div>
+        </div>
       `;
       chatBox.appendChild(wrapper);
       chatBox.scrollTop = chatBox.scrollHeight;
-      return wrapper.querySelector(".message-content");
+      return {
+        contentEl: wrapper.querySelector(".message-content"),
+        copyButton: wrapper.querySelector(".copy-button"),
+        wrapper
+      };
     }
 
     function showAlert(message) {
@@ -109,35 +238,212 @@
       alertBox.innerHTML = "";
     }
 
+    function resetGenerationState() {
+      if (currentController) {
+        currentController.abort();
+        currentController = null;
+      }
+      isGenerating = false;
+      sendButton.disabled = false;
+      statusText.textContent = "";
+    }
+
+    function cancelActiveGeneration(options = {}) {
+      const { removePendingUser = false } = options;
+      if (!isGenerating && !currentController) return;
+
+      if (currentController) {
+        currentController.abort();
+        currentController = null;
+      }
+
+      isGenerating = false;
+      sendButton.disabled = false;
+      statusText.textContent = "";
+
+      if (removePendingUser && chatHistory.length && chatHistory[chatHistory.length - 1].role === "user") {
+        chatHistory.pop();
+        saveState();
+        updateTranscriptPreview(promptInput.value);
+      }
+    }
+
+    function estimateTokens(text) {
+      return Math.max(1, Math.ceil(text.length / 4));
+    }
+
+    function buildTranscriptPreview(currentPrompt = "") {
+      const sections = [];
+      const cleanSystem = systemPromptInput.value.trim();
+      if (cleanSystem) {
+        sections.push(`System: ${cleanSystem}`);
+      }
+
+      const trimmedHistory = chatHistory.slice(-MAX_HISTORY_TURNS);
+      for (const message of trimmedHistory) {
+        if (!message.content) continue;
+        if (message.role === "user") {
+          sections.push(`User: ${message.content}`);
+        } else if (message.role === "assistant") {
+          sections.push(`Assistant: ${message.content}`);
+        }
+      }
+
+      if (currentPrompt.trim()) {
+        sections.push(`User: ${currentPrompt.trim()}`);
+      }
+      sections.push("Assistant:");
+
+      let transcript = sections.join("\n\n");
+      if (transcript.length > MAX_PROMPT_CHARS) {
+        transcript = transcript.slice(-MAX_PROMPT_CHARS);
+      }
+      return transcript;
+    }
+
+    function updateTranscriptPreview(currentPrompt = "") {
+      const transcript = buildTranscriptPreview(currentPrompt);
+      const charCount = transcript.length;
+      const approxTokens = estimateTokens(transcript);
+      const outputSetting = Number(tokenInput.value || 0);
+      const usageRatio = Math.min(100, Math.round((charCount / MAX_PROMPT_CHARS) * 100));
+
+      transcriptChars.textContent = String(charCount);
+      transcriptTokens.textContent = String(approxTokens);
+      outputTokens.textContent = String(outputSetting);
+      historyTurns.textContent = String(Math.floor(chatHistory.length / 2));
+      contextProgress.style.width = `${usageRatio}%`;
+
+      contextProgress.className = "progress-bar";
+      contextStatus.className = "badge text-bg-secondary";
+      contextStatus.textContent = "Healthy";
+
+      if (usageRatio >= 90) {
+        contextProgress.classList.add("bg-danger");
+        contextStatus.className = "badge text-bg-danger";
+        contextStatus.textContent = "Near Limit";
+      } else if (usageRatio >= 70) {
+        contextProgress.classList.add("bg-warning");
+        contextStatus.className = "badge text-bg-warning";
+        contextStatus.textContent = "Getting Full";
+      } else {
+        contextProgress.classList.add("bg-success");
+      }
+    }
+
+    function saveState() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        systemPrompt: systemPromptInput.value,
+        history: chatHistory
+      }));
+    }
+
+    function setActivePreset(presetKey) {
+      presetButtons.forEach((button) => {
+        const active = button.dataset.preset === presetKey;
+        button.classList.toggle("btn-primary", active);
+        button.classList.toggle("btn-outline-secondary", !active);
+      });
+    }
+
+    function applyPreset(presetKey) {
+      const preset = PRESETS[presetKey];
+      if (!preset) return;
+
+      systemPromptInput.value = preset.systemPrompt;
+      tokenInput.value = preset.n;
+      tempInput.value = preset.temp;
+      topPInput.value = preset.topP;
+      topKInput.value = preset.topK;
+      nglInput.value = preset.ngl;
+      setActivePreset(presetKey);
+      saveState();
+      updateTranscriptPreview(promptInput.value);
+    }
+
+    function renderMarkdown(text) {
+      const unsafeHtml = marked.parse(text, { breaks: true, gfm: true });
+      return DOMPurify.sanitize(unsafeHtml);
+    }
+
+    function updateAssistantMessage(messageView, text, renderFinal = false) {
+      messageView.copyButton.disabled = !text.trim();
+      messageView.copyButton.dataset.copyText = text;
+
+      if (renderFinal) {
+        messageView.contentEl.innerHTML = renderMarkdown(text);
+      } else {
+        messageView.contentEl.textContent = text;
+      }
+    }
+
+    function restoreState() {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+
+      try {
+        const state = JSON.parse(raw);
+        chatHistory = Array.isArray(state.history) ? state.history : [];
+        systemPromptInput.value = state.systemPrompt || "";
+
+        for (const message of chatHistory) {
+          if (message.role === "user") {
+            appendMessage("You", message.content, "white");
+          } else if (message.role === "assistant") {
+            appendRenderedAssistantMessage(message.content);
+          }
+        }
+      } catch (error) {
+        localStorage.removeItem(STORAGE_KEY);
+      }
+    }
+
+    function clearChat() {
+      chatHistory = [];
+      chatBox.innerHTML = "";
+      clearAlert();
+      saveState();
+      updateTranscriptPreview();
+      promptInput.focus();
+    }
+
     async function sendChat() {
       const prompt = promptInput.value.trim();
       if (!prompt) return;
 
+      cancelActiveGeneration();
       clearAlert();
       const data = new FormData(form);
       data.append("prompt", prompt);
+      data.append("history_json", JSON.stringify(chatHistory));
 
       appendMessage("You", prompt, "white");
+      chatHistory.push({ role: "user", content: prompt });
+      updateTranscriptPreview();
       const aiMessage = createStreamingMessage("AI", "body-tertiary");
+      currentAssistantMessage = aiMessage;
       promptInput.value = "";
+      currentController = new AbortController();
+      isGenerating = true;
       sendButton.disabled = true;
       statusText.textContent = "Running llama-completion...";
 
       try {
         const response = await fetch("/chat", {
           method: "POST",
-          body: data
+          body: data,
+          signal: currentController.signal
         });
 
         if (!response.ok) {
           const payload = await response.json();
-          aiMessage.textContent = "";
+          updateAssistantMessage(aiMessage, "", false);
           showAlert(payload.detail || "Request failed");
           return;
         }
 
         if (!response.body) {
-          aiMessage.textContent = "";
+          updateAssistantMessage(aiMessage, "", false);
           showAlert("Streaming response body was not available.");
           return;
         }
@@ -145,6 +451,7 @@
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let buffer = "";
+        let assistantReply = "";
 
         while (true) {
           const { value, done } = await reader.read();
@@ -159,20 +466,43 @@
             const event = JSON.parse(line);
 
             if (event.type === "token") {
-              aiMessage.textContent += event.content;
+              assistantReply += event.content;
+              updateAssistantMessage(aiMessage, assistantReply, false);
               chatBox.scrollTop = chatBox.scrollHeight;
             } else if (event.type === "error") {
-              aiMessage.textContent = aiMessage.textContent.trim();
+              updateAssistantMessage(aiMessage, assistantReply.trim(), false);
+              chatHistory.pop();
               showAlert(event.content || "Generation failed.");
+              saveState();
+              updateTranscriptPreview();
+            } else if (event.type === "done") {
+              assistantReply = assistantReply.trim();
+              updateAssistantMessage(aiMessage, assistantReply || "(empty response)", true);
+              if (assistantReply) {
+                chatHistory.push({ role: "assistant", content: assistantReply });
+              }
+              saveState();
+              updateTranscriptPreview();
+              currentAssistantMessage = null;
             }
           }
         }
 
-        aiMessage.textContent = aiMessage.textContent.trim() || "(empty response)";
+        if (!assistantReply.trim()) {
+          updateAssistantMessage(aiMessage, "(empty response)", false);
+        }
       } catch (error) {
-        aiMessage.textContent = "";
-        showAlert(error.message || "Request failed");
+        if (error.name !== "AbortError") {
+          updateAssistantMessage(aiMessage, "", false);
+          chatHistory.pop();
+          showAlert(error.message || "Request failed");
+          saveState();
+          updateTranscriptPreview();
+        }
       } finally {
+        currentController = null;
+        currentAssistantMessage = null;
+        isGenerating = false;
         sendButton.disabled = false;
         statusText.textContent = "";
         promptInput.focus();
@@ -185,6 +515,47 @@
         sendChat();
       }
     });
+
+    presetButtons.forEach((button) => {
+      button.addEventListener("click", () => applyPreset(button.dataset.preset));
+    });
+
+    chatBox.addEventListener("click", async (event) => {
+      const button = event.target.closest(".copy-button");
+      if (!button) return;
+
+      const rawText = button.dataset.copyText || "";
+      if (!rawText.trim()) return;
+
+      try {
+        await navigator.clipboard.writeText(rawText);
+        const original = button.textContent;
+        button.textContent = "Copied";
+        setTimeout(() => {
+          button.textContent = original;
+        }, 1200);
+      } catch (error) {
+        showAlert("Could not copy the response to the clipboard.");
+      }
+    });
+
+    systemPromptInput.addEventListener("input", () => {
+      saveState();
+      updateTranscriptPreview(promptInput.value);
+    });
+    promptInput.addEventListener("input", () => {
+      if (isGenerating) {
+        cancelActiveGeneration({ removePendingUser: true });
+        if (currentAssistantMessage) {
+          currentAssistantMessage.wrapper.remove();
+          currentAssistantMessage = null;
+        }
+      }
+      updateTranscriptPreview(promptInput.value);
+    });
+    tokenInput.addEventListener("input", () => updateTranscriptPreview(promptInput.value));
+    restoreState();
+    updateTranscriptPreview();
   </script>
 </body>
 </html>

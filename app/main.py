@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 from pathlib import Path
@@ -24,12 +25,45 @@ templates = Jinja2Templates(directory="app/templates")
 REQUEST_TIMEOUT_SECONDS = 120
 MAX_TOKENS = 256
 MAX_GPU_LAYERS = 99
+MAX_HISTORY_TURNS = 12
+MAX_PROMPT_CHARS = 24000
 
 
 def get_models() -> list[str]:
     if not MODEL_DIR.exists():
         return []
     return sorted(path.name for path in MODEL_DIR.glob("*.gguf"))
+
+
+def build_chat_prompt(
+    system_prompt: str,
+    history: list[dict[str, str]],
+    user_prompt: str,
+) -> str:
+    sections: list[str] = []
+
+    clean_system = system_prompt.strip()
+    if clean_system:
+        sections.append(f"System: {clean_system}")
+
+    trimmed_history = history[-MAX_HISTORY_TURNS:]
+    for message in trimmed_history:
+        role = message.get("role", "").strip().lower()
+        content = message.get("content", "").strip()
+        if not content:
+            continue
+        if role == "user":
+            sections.append(f"User: {content}")
+        elif role == "assistant":
+            sections.append(f"Assistant: {content}")
+
+    sections.append(f"User: {user_prompt.strip()}")
+    sections.append("Assistant:")
+
+    prompt = "\n\n".join(sections)
+    if len(prompt) > MAX_PROMPT_CHARS:
+        prompt = prompt[-MAX_PROMPT_CHARS:]
+    return prompt
 
 
 def build_command(
@@ -78,6 +112,9 @@ def home(request: Request) -> HTMLResponse:
         context={
             "models": get_models(),
             "default_model": get_models()[0] if get_models() else None,
+            "max_history_turns": MAX_HISTORY_TURNS,
+            "max_prompt_chars": MAX_PROMPT_CHARS,
+            "max_tokens": MAX_TOKENS,
         },
     )
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
@@ -87,8 +124,11 @@ def home(request: Request) -> HTMLResponse:
 
 
 @app.post("/chat")
-def chat(
+async def chat(
+    request: Request,
     prompt: str = Form(...),
+    system_prompt: str = Form(""),
+    history_json: str = Form("[]"),
     model: str = Form(...),
     n: int = Form(64),
     temp: float = Form(0.5),
@@ -110,11 +150,19 @@ def chat(
     if not clean_prompt:
         raise HTTPException(status_code=400, detail="Prompt cannot be empty")
 
-    cmd = build_command(clean_prompt, model, n, temp, top_p, top_k, ngl)
+    try:
+        history = json.loads(history_json)
+        if not isinstance(history, list):
+            raise ValueError
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Chat history payload was invalid") from exc
+
+    full_prompt = build_chat_prompt(system_prompt, history, clean_prompt)
+    cmd = build_command(full_prompt, model, n, temp, top_p, top_k, ngl)
 
     print("Running command:", " ".join(cmd), flush=True)
 
-    def generate():
+    async def generate():
         process = None
         stdout_buffer = ""
         stderr_parts: list[str] = []
@@ -132,6 +180,10 @@ def chat(
             os.set_blocking(process.stderr.fileno(), False)
 
             while True:
+                if await request.is_disconnected():
+                    process.kill()
+                    return
+
                 if time.monotonic() - started_at > REQUEST_TIMEOUT_SECONDS:
                     process.kill()
                     yield stream_line(
@@ -232,11 +284,12 @@ def chat(
                     yield stream_line({"type": "done", "content": ""})
                     return
 
-                time.sleep(0.05)
+                await asyncio.sleep(0.05)
         except Exception as exc:
             if process and process.poll() is None:
                 process.kill()
-            yield stream_line({"type": "error", "content": str(exc)})
+            if not await request.is_disconnected():
+                yield stream_line({"type": "error", "content": str(exc)})
 
     return StreamingResponse(
         generate(),
