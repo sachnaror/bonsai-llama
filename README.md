@@ -17,11 +17,14 @@ Small local chat UI for running a Bonsai GGUF model through `llama.cpp` using:
 
 This repo is intentionally simple. No database. No auth. No orchestration layer trying to earn a promotion. Just a practical app that takes a prompt, runs a local model, and sends the answer back to the browser.
 
-## Preview
+## YouTube Preview
 
-<img src="docs/app-screenshot.png" alt="Bonsai Llama app screenshot" width="700">
+<a href="https://youtu.be/T70qJMAckiY">
+  <img src="docs/sss.png" alt="App Explainer YouTube preview" width="700">
+</a>
 
-The README also includes a lightweight banner graphic for a cleaner first impression, but this screenshot is the real app in action.
+
+
 
 ```md
 
@@ -96,10 +99,7 @@ That means your GitHub repo can stay clean, fast to review, and friendly to futu
 - It is designed for local usage
 - Model speed depends heavily on your hardware and model size
 
-<a href="https://youtu.be/T70qJMAckiY">
-  <img src="https://img.youtube.com/vi/dQw4w9WgXcQ/maxresdefault.jpg" alt="App Explainer YouTube preview" width="700">
-</a>
-
+<img src="docs/ss.png" alt="Bonsai Llama app screenshot" width="700">
 
 
 ## Project Structure
