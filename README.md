@@ -96,8 +96,8 @@ That means your GitHub repo can stay clean, fast to review, and friendly to futu
 - It is designed for local usage
 - Model speed depends heavily on your hardware and model size
 
-<a href="https://www.youtube.com/watch?v=dQw4w9WgXcQ">
-  <img src="https://img.youtube.com/vi/dQw4w9WgXcQ/maxresdefault.jpg" alt="Dummy YouTube preview" width="700">
+<a href="https://youtu.be/T70qJMAckiY">
+  <img src="https://img.youtube.com/vi/dQw4w9WgXcQ/maxresdefault.jpg" alt="App Explainer YouTube preview" width="700">
 </a>
 
 
