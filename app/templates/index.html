@@ -34,6 +34,31 @@
     .message-markdown pre:last-child {
       margin-bottom: 0;
     }
+
+    .message-markdown p,
+    .message-markdown ul,
+    .message-markdown ol {
+      margin-bottom: 0.85rem;
+    }
+
+    .message-markdown ol,
+    .message-markdown ul {
+      padding-left: 1.35rem;
+    }
+
+    .message-markdown li + li {
+      margin-top: 0.3rem;
+    }
+
+    .message-markdown h1,
+    .message-markdown h2,
+    .message-markdown h3,
+    .message-markdown h4 {
+      margin-top: 0;
+      margin-bottom: 0.75rem;
+      font-size: 1rem;
+      font-weight: 700;
+    }
   </style>
 </head>
 <body class="bg-body-tertiary">
@@ -42,18 +67,6 @@
       <aside class="col-12 col-lg-3 border-end bg-white p-4">
         <h4 class="mb-4">Settings</h4>
         <form id="chatForm" class="d-grid gap-3">
-          <div>
-            <label for="system_prompt" class="form-label">System Prompt</label>
-            <textarea id="system_prompt" name="system_prompt" rows="4" class="form-control" placeholder="You are a helpful local assistant."></textarea>
-          </div>
-          <div>
-            <label class="form-label">Presets</label>
-            <div class="d-grid gap-2">
-              <button type="button" class="btn btn-outline-secondary text-start preset-button" data-preset="coding">Coding</button>
-              <button type="button" class="btn btn-outline-secondary text-start preset-button" data-preset="summarization">Summarization</button>
-              <button type="button" class="btn btn-outline-secondary text-start preset-button" data-preset="brainstorming">Brainstorming</button>
-            </div>
-          </div>
           <div>
             <label for="model" class="form-label">Model</label>
             <select id="model" class="form-select" name="model" {% if not models %}disabled{% endif %}>
@@ -131,7 +144,6 @@
     const sendButton = document.getElementById("sendButton");
     const statusText = document.getElementById("statusText");
     const alertBox = document.getElementById("alertBox");
-    const systemPromptInput = document.getElementById("system_prompt");
     const transcriptChars = document.getElementById("transcriptChars");
     const transcriptTokens = document.getElementById("transcriptTokens");
     const outputTokens = document.getElementById("outputTokens");
@@ -143,43 +155,14 @@
     const topPInput = document.getElementById("top_p");
     const topKInput = document.getElementById("top_k");
     const nglInput = document.getElementById("ngl");
-    const presetButtons = Array.from(document.querySelectorAll(".preset-button"));
     const STORAGE_KEY = "bonsai-llama-chat-state";
     const MAX_HISTORY_TURNS = {{ max_history_turns }};
     const MAX_PROMPT_CHARS = {{ max_prompt_chars }};
+    const DEFAULT_BEHAVIOR = {{ default_behavior|tojson }};
     let chatHistory = [];
     let currentController = null;
     let currentAssistantMessage = null;
     let isGenerating = false;
-    const PRESETS = {
-      coding: {
-        label: "Coding",
-        systemPrompt: "You are a careful coding assistant. Explain clearly, prefer correct code, mention edge cases briefly, and keep answers practical.",
-        n: 192,
-        temp: 0.2,
-        topP: 0.9,
-        topK: 30,
-        ngl: 0
-      },
-      summarization: {
-        label: "Summarization",
-        systemPrompt: "You are a concise summarization assistant. Extract the key points, remove repetition, and preserve important details.",
-        n: 128,
-        temp: 0.3,
-        topP: 0.9,
-        topK: 30,
-        ngl: 0
-      },
-      brainstorming: {
-        label: "Brainstorming",
-        systemPrompt: "You are a creative brainstorming partner. Offer varied ideas, useful angles, and concrete next steps without getting too vague.",
-        n: 192,
-        temp: 0.8,
-        topP: 0.95,
-        topK: 40,
-        ngl: 0
-      }
-    };
 
     function escapeHtml(text) {
       return text
@@ -273,12 +256,7 @@
     }
 
     function buildTranscriptPreview(currentPrompt = "") {
-      const sections = [];
-      const cleanSystem = systemPromptInput.value.trim();
-      if (cleanSystem) {
-        sections.push(`System: ${cleanSystem}`);
-      }
-
+      const sections = [`System: ${DEFAULT_BEHAVIOR}`];
       const trimmedHistory = chatHistory.slice(-MAX_HISTORY_TURNS);
       for (const message of trimmedHistory) {
         if (!message.content) continue;
@@ -333,32 +311,8 @@
 
     function saveState() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        systemPrompt: systemPromptInput.value,
         history: chatHistory
       }));
-    }
-
-    function setActivePreset(presetKey) {
-      presetButtons.forEach((button) => {
-        const active = button.dataset.preset === presetKey;
-        button.classList.toggle("btn-primary", active);
-        button.classList.toggle("btn-outline-secondary", !active);
-      });
-    }
-
-    function applyPreset(presetKey) {
-      const preset = PRESETS[presetKey];
-      if (!preset) return;
-
-      systemPromptInput.value = preset.systemPrompt;
-      tokenInput.value = preset.n;
-      tempInput.value = preset.temp;
-      topPInput.value = preset.topP;
-      topKInput.value = preset.topK;
-      nglInput.value = preset.ngl;
-      setActivePreset(presetKey);
-      saveState();
-      updateTranscriptPreview(promptInput.value);
     }
 
     function renderMarkdown(text) {
@@ -384,7 +338,6 @@
       try {
         const state = JSON.parse(raw);
         chatHistory = Array.isArray(state.history) ? state.history : [];
-        systemPromptInput.value = state.systemPrompt || "";
 
         for (const message of chatHistory) {
           if (message.role === "user") {
@@ -516,10 +469,6 @@
       }
     });
 
-    presetButtons.forEach((button) => {
-      button.addEventListener("click", () => applyPreset(button.dataset.preset));
-    });
-
     chatBox.addEventListener("click", async (event) => {
       const button = event.target.closest(".copy-button");
       if (!button) return;
@@ -539,10 +488,6 @@
       }
     });
 
-    systemPromptInput.addEventListener("input", () => {
-      saveState();
-      updateTranscriptPreview(promptInput.value);
-    });
     promptInput.addEventListener("input", () => {
       if (isGenerating) {
         cancelActiveGeneration({ removePendingUser: true });

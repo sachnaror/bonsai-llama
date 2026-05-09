@@ -67,8 +67,8 @@ The app:
 
 - Streaming token output to the browser
 - Chat history with multi-turn context
-- System prompt support
-- Presets for coding, summarization, and brainstorming
+- ~~System prompt support~~
+- ~~Presets for coding.~~
 - Markdown rendering for responses
 - Copy button for outputs
 - Request cancellation button
@@ -80,7 +80,7 @@ The app:
 - Docker support
 - A proper demo GIF in `docs/`
 
-## Why This Repo Is Nice To Push
+## Simple and Easy to understand
 
 - Small and understandable
 - No model weights committed
@@ -96,6 +96,9 @@ That means your GitHub repo can stay clean, fast to review, and friendly to futu
 - It is designed for local usage
 - Model speed depends heavily on your hardware and model size
 
+<a href="https://www.youtube.com/watch?v=dQw4w9WgXcQ">
+  <img src="https://img.youtube.com/vi/dQw4w9WgXcQ/maxresdefault.jpg" alt="Dummy YouTube preview" width="700">
+</a>
 
 
 
@@ -311,4 +314,3 @@ Running command: /path/to/llama-completion ...
 | **🌐 Website**    | [Link](https://about.me/sachin-arora) |
 | **🌐 Twitter**    | [Link](https://twitter.com/sachinhep) |
 | **📱 Phone**      | [+91 9560330483](tel:+919560330483) |
-

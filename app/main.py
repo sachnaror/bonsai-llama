@@ -27,6 +27,12 @@ MAX_TOKENS = 256
 MAX_GPU_LAYERS = 99
 MAX_HISTORY_TURNS = 12
 MAX_PROMPT_CHARS = 24000
+DEFAULT_BEHAVIOR = (
+    "Respond in a clear, well-formatted way. "
+    "When explaining something, prefer numbered step-by-step structure such as Step 1, Step 2, Step 3 instead of one long paragraph. "
+    "Use short sections, bullets, or code blocks when they make the answer clearer. "
+    "If the user asks for only code or only the final answer, return just that."
+)
 
 
 def get_models() -> list[str]:
@@ -36,15 +42,10 @@ def get_models() -> list[str]:
 
 
 def build_chat_prompt(
-    system_prompt: str,
     history: list[dict[str, str]],
     user_prompt: str,
 ) -> str:
-    sections: list[str] = []
-
-    clean_system = system_prompt.strip()
-    if clean_system:
-        sections.append(f"System: {clean_system}")
+    sections: list[str] = [f"System: {DEFAULT_BEHAVIOR}"]
 
     trimmed_history = history[-MAX_HISTORY_TURNS:]
     for message in trimmed_history:
@@ -115,6 +116,7 @@ def home(request: Request) -> HTMLResponse:
             "max_history_turns": MAX_HISTORY_TURNS,
             "max_prompt_chars": MAX_PROMPT_CHARS,
             "max_tokens": MAX_TOKENS,
+            "default_behavior": DEFAULT_BEHAVIOR,
         },
     )
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
@@ -127,7 +129,6 @@ def home(request: Request) -> HTMLResponse:
 async def chat(
     request: Request,
     prompt: str = Form(...),
-    system_prompt: str = Form(""),
     history_json: str = Form("[]"),
     model: str = Form(...),
     n: int = Form(64),
@@ -157,7 +158,7 @@ async def chat(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="Chat history payload was invalid") from exc
 
-    full_prompt = build_chat_prompt(system_prompt, history, clean_prompt)
+    full_prompt = build_chat_prompt(history, clean_prompt)
     cmd = build_command(full_prompt, model, n, temp, top_p, top_k, ngl)
 
     print("Running command:", " ".join(cmd), flush=True)
