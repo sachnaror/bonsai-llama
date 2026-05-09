@@ -75,6 +75,30 @@ The app:
 - Basic prompt templates
 
 
+## What I can do next (but havent done yet):
+
+- Docker support
+- A proper demo GIF in `docs/`
+
+## Why This Repo Is Nice To Push
+
+- Small and understandable
+- No model weights committed
+- No giant build directory committed
+- Clear setup steps
+- Easy for someone else to clone and run
+
+That means your GitHub repo can stay clean, fast to review, and friendly to future-you.
+
+## Notes
+
+- This project uses `llama-completion`, not `llama-cli`
+- It is designed for local usage
+- Model speed depends heavily on your hardware and model size
+
+
+
+
 ## Project Structure
 
 ```text
@@ -116,31 +140,7 @@ Recommended first-run values:
 - Top K: `30`
 - GPU Layers: `0`
 
-Starting with `GPU Layers = 0` keeps things calm while you validate the flow. Once the app is stable on your machine, you can experiment upward with higher GPU layer counts like 99.
-
-
-## What I can do next (but havent done yet):
-
-- Docker support
-- A proper demo GIF in `docs/`
-
-## Why This Repo Is Nice To Push
-
-- Small and understandable
-- No model weights committed
-- No giant build directory committed
-- Clear setup steps
-- Easy for someone else to clone and run
-
-That means your GitHub repo can stay clean, fast to review, and friendly to future-you.
-
-## Notes
-
-- This project uses `llama-completion`, not `llama-cli`
-- It is designed for local usage
-- Model speed depends heavily on your hardware and model size
-
-
+Starting with `GPU Layers = 0` keeps things calm while you validate the flow. Once the app is stable on your machine, you can experiment upward with higher GPU layer counts like 40.
 
 
 
